@@ -1,0 +1,23 @@
+# Render Blueprint for Backend and Telegram Bot
+services:
+  - type: web
+    name: teacher-jobs-uz-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: node src/server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        value: https://teacher-jobs-uz.netlify.app
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
