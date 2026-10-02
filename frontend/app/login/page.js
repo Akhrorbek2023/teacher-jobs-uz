@@ -20,9 +20,21 @@ export default function Login() {
 
     try {
       const s = createClient();
+      const origin = typeof window !== "undefined"
+        ? window.location.origin
+        : (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000");
+
+      const emailRedirectTo = `${origin}/auth/callback`;
+
       const r = mode === "login"
         ? await s.auth.signInWithPassword({ email, password })
-        : await s.auth.signUp({ email, password });
+        : await s.auth.signUp({
+            email,
+            password,
+            options: {
+              emailRedirectTo
+            }
+          });
 
       if (r.error) {
         setMsg(r.error.message);
@@ -31,8 +43,7 @@ export default function Login() {
           setMsg("Kirish muvaffaqiyatli! Yo‘naltirilmoqda...");
           router.push("/profile");
         } else {
-          setMsg("Hisob yaratildi! Emailingizga tasdiqlash xabari yuborildi (agar talab etilsa).");
-          setTimeout(() => router.push("/profile"), 1500);
+          setMsg("Hisob yaratildi! Emailingizga tasdiqlash havolasi yuborildi. Iltimos, pochtangizni tekshiring.");
         }
       }
     } catch (err) {
