@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import vacancies from "./routes/vacancies.js";
 import ai from "./routes/ai.js";
 import companies from "./routes/companies.js";
+import { startBot } from "./bot.js";
 
 const app = express();
 app.use(helmet());
@@ -41,4 +42,8 @@ app.use((err, _req, res, _next) => {
 });
 
 const port = Number(process.env.PORT || 4000);
-app.listen(port, () => console.log(`API: http://localhost:${port}`));
+app.listen(port, () => {
+  console.log(`API: http://localhost:${port}`);
+  // Start the telegram bot alongside the API
+  startBot().catch(err => console.error("Bot xatoligi:", err));
+});
