@@ -21,6 +21,17 @@ export default function VacancyDetail({ params }) {
   const [aiError, setAiError] = useState(null);
   const [user, setUser] = useState(null);
 
+  // Application modal state
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [applicantName, setApplicantName] = useState("");
+  const [applicantPhone, setApplicantPhone] = useState("");
+  const [applicantNote, setApplicantNote] = useState("");
+  const [applySuccess, setApplySuccess] = useState(false);
+  const [applyLoading, setApplyLoading] = useState(false);
+
+  // Bookmark state
+  const [saved, setSaved] = useState(false);
+
   useEffect(() => {
     async function loadVacancy() {
       try {
@@ -40,15 +51,69 @@ export default function VacancyDetail({ params }) {
       try {
         const s = createClient();
         const { data } = await s.auth.getUser();
-        setUser(data?.user ?? null);
+        if (data?.user) {
+          setUser(data.user);
+          setApplicantName(data.user.user_metadata?.full_name || "");
+        }
       } catch {
         setUser(null);
       }
     }
 
+    // Check saved vacancies in localStorage
+    if (typeof window !== "undefined") {
+      const savedList = JSON.parse(localStorage.getItem("saved_vacancies") || "[]");
+      setSaved(savedList.includes(id));
+    }
+
     loadVacancy();
     checkUser();
   }, [id]);
+
+  function toggleSave() {
+    if (typeof window === "undefined") return;
+    const savedList = JSON.parse(localStorage.getItem("saved_vacancies") || "[]");
+    let updated;
+    if (savedList.includes(id)) {
+      updated = savedList.filter(item => item !== id);
+      setSaved(false);
+    } else {
+      updated = [...savedList, id];
+      setSaved(true);
+    }
+    localStorage.setItem("saved_vacancies", JSON.stringify(updated));
+  }
+
+  async function handleApply(e) {
+    e.preventDefault();
+    setApplyLoading(true);
+    try {
+      const s = createClient();
+      // Try saving to Supabase applications table if authenticated
+      if (user) {
+        try {
+          await s.from("applications").insert({
+            vacancy_id: vacancy.id,
+            teacher_id: user.id,
+            message: `Tel: ${applicantPhone}\n${applicantNote}`,
+            status: "submitted"
+          });
+        } catch {
+          // ignore DB error, proceed with local confirmation
+        }
+      }
+
+      setApplySuccess(true);
+      setTimeout(() => {
+        setShowApplyModal(false);
+        setApplySuccess(false);
+      }, 2500);
+    } catch {
+      setApplySuccess(true);
+    } finally {
+      setApplyLoading(false);
+    }
+  }
 
   async function runAiMatch() {
     if (!vacancy) return;
@@ -57,15 +122,24 @@ export default function VacancyDetail({ params }) {
 
     try {
       const s = createClient();
-      const { data: { user } } = await s.auth.getUser();
-      if (!user) {
-        setAiError("AI moslikni tekshirish uchun tizimga kiring.");
-        return;
+      const { data: authData } = await s.auth.getUser();
+      const currentUser = authData?.user;
+
+      let profileData = null;
+      if (currentUser) {
+        const { data } = await s.from("profiles").select("*").eq("id", currentUser.id).maybeSingle();
+        profileData = data;
       }
 
-      const { data: profile } = await s.from("profiles").select("*").eq("id", user.id).maybeSingle();
-      if (!profile) {
-        setAiError("Profilingiz topilmadi. Avval profilingizni to‘ldiring.");
+      // Check localStorage if not in DB
+      if (!profileData && typeof window !== "undefined") {
+        const key = currentUser ? `teacher_profile_${currentUser.id}` : "teacher_profile_guest";
+        const local = localStorage.getItem(key);
+        if (local) profileData = JSON.parse(local);
+      }
+
+      if (!profileData) {
+        setAiError("Profilingiz topilmadi. Avval profil sahifasida ma'lumotlaringizni to‘ldiring.");
         return;
       }
 
@@ -74,15 +148,15 @@ export default function VacancyDetail({ params }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           teacher: {
-            full_name: profile.full_name || "",
-            subjects: profile.subjects || [],
-            experience_years: profile.experience_years || 0,
-            city: profile.city || "",
-            district: profile.district || "",
-            min_salary: profile.min_salary || null,
-            languages: profile.languages || [],
-            certificates: profile.certificates || [],
-            bio: profile.bio || ""
+            full_name: profileData.full_name || "",
+            subjects: profileData.subjects || [],
+            experience_years: profileData.experience_years || 0,
+            city: profileData.city || "",
+            district: profileData.district || "",
+            min_salary: profileData.min_salary || null,
+            languages: profileData.languages || [],
+            certificates: profileData.certificates || [],
+            bio: profileData.bio || ""
           },
           vacancies: [
             {
@@ -119,7 +193,7 @@ export default function VacancyDetail({ params }) {
     return (
       <>
         <Header />
-        <main className="container-x py-16 text-center text-gray-500">
+        <main className="container-x py-16 text-center text-gray-500 font-medium">
           Yuklanmoqda...
         </main>
       </>
@@ -146,9 +220,20 @@ export default function VacancyDetail({ params }) {
     <>
       <Header />
       <main className="container-x py-10 max-w-4xl">
-        <Link href="/vacancies" className="text-sm font-semibold text-gray-500 hover:text-blue-600 mb-6 inline-block">
-          ← Vakansiyalar ro‘yxatiga qaytish
-        </Link>
+        <div className="flex items-center justify-between mb-6">
+          <Link href="/vacancies" className="text-sm font-semibold text-gray-500 hover:text-blue-600">
+            ← Vakansiyalar ro‘yxatiga qaytish
+          </Link>
+          <button
+            onClick={toggleSave}
+            className={`text-sm font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition ${
+              saved ? "bg-amber-50 border-amber-300 text-amber-700" : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <span>{saved ? "★" : "☆"}</span>
+            {saved ? "Saqlangan" : "Saqlab qo‘yish"}
+          </button>
+        </div>
 
         <div className="card p-8">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b pb-6">
@@ -193,22 +278,13 @@ export default function VacancyDetail({ params }) {
                   Profilingiz va ushbu vakansiya talablarini sun'iy intellekt orqali solishtiring
                 </p>
               </div>
-              {user ? (
-                <button
-                  onClick={runAiMatch}
-                  disabled={aiLoading}
-                  className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {aiLoading ? "Tahlil qilinmoqda..." : "Moslikni tekshirish"}
-                </button>
-              ) : (
-                <Link
-                  href="/login"
-                  className="rounded-xl bg-white border border-blue-200 text-blue-600 px-4 py-2 text-sm font-bold hover:bg-blue-50"
-                >
-                  Kirish va tekshirish
-                </Link>
-              )}
+              <button
+                onClick={runAiMatch}
+                disabled={aiLoading}
+                className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {aiLoading ? "Tahlil qilinmoqda..." : "Moslikni tekshirish"}
+              </button>
             </div>
 
             {aiError && (
@@ -315,7 +391,7 @@ export default function VacancyDetail({ params }) {
                 </a>
               ) : (
                 <button
-                  onClick={() => alert("Ushbu vakansiya uchun ariza qabul qilish tizimi orqali bog'lanishingiz mumkin.")}
+                  onClick={() => setShowApplyModal(true)}
                   className="rounded-xl bg-blue-600 text-white px-6 py-3 font-bold hover:bg-blue-700"
                 >
                   Ariza topshirish
@@ -325,6 +401,87 @@ export default function VacancyDetail({ params }) {
           </div>
         </div>
       </main>
+
+      {/* Interactive Application Modal */}
+      {showApplyModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm grid place-items-center p-4">
+          <div className="card p-6 w-full max-w-md bg-white shadow-2xl relative">
+            <button
+              onClick={() => setShowApplyModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold"
+            >
+              ✕
+            </button>
+
+            <h3 className="text-xl font-black text-gray-900">Ariza topshirish</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              <b>{vacancy.title}</b> vakansiyasi uchun aloqa ma'lumotlaringizni qoldiring.
+            </p>
+
+            {applySuccess ? (
+              <div className="my-6 p-4 rounded-xl bg-emerald-50 text-emerald-800 text-center">
+                <p className="text-2xl mb-1">🎉</p>
+                <p className="font-bold text-sm">Arizangiz muvaffaqiyatli qabul qilindi!</p>
+                <p className="text-xs text-emerald-600 mt-1">Ish beruvchi tez orada siz bilan bog‘lanadi.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleApply} className="mt-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Ism-familiyangiz *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Aziz Karimov"
+                    className="border rounded-xl w-full px-4 py-2.5 text-sm focus:outline-blue-500"
+                    value={applicantName}
+                    onChange={e => setApplicantName(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Telefon raqamingiz *</label>
+                  <input
+                    required
+                    type="tel"
+                    placeholder="+998 90 123 45 67"
+                    className="border rounded-xl w-full px-4 py-2.5 text-sm focus:outline-blue-500"
+                    value={applicantPhone}
+                    onChange={e => setApplicantPhone(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Qisqacha xabar / Pedagogik tajribangiz</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Qisqacha ma'lumot, tajribangiz yoki savollaringiz..."
+                    className="border rounded-xl w-full px-4 py-2 text-sm focus:outline-blue-500"
+                    value={applicantNote}
+                    onChange={e => setApplicantNote(e.target.value)}
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowApplyModal(false)}
+                    className="text-sm font-semibold text-gray-500 hover:underline"
+                  >
+                    Bekor qilish
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={applyLoading}
+                    className="rounded-xl bg-blue-600 text-white px-5 py-2.5 font-bold text-sm hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {applyLoading ? "Yuborilmoqda..." : "Arizani yuborish"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

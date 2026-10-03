@@ -1,8 +1,19 @@
 import "./globals.css";
+import Footer from "../components/Footer";
+
 export const metadata = {
   title: "Teacher Jobs UZ — O‘qituvchilar uchun vakansiyalar",
   description: "O‘zbekistondagi o‘qituvchilar uchun vakansiyalarni bir joydan qidiring."
 };
-export default function RootLayout({children}) {
-  return <html lang="uz"><body>{children}</body></html>;
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="uz">
+      <body className="flex flex-col min-h-screen">
+        <div className="flex-1">{children}</div>
+        <Footer />
+      </body>
+    </html>
+  );
 }
+
