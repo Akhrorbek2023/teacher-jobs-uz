@@ -173,7 +173,18 @@ export async function startBot() {
         const chatId = String(msg.chat.id);
         const text = (msg.text || "").trim();
 
-        if (text.startsWith("/start") || text === "⬅️ Asosiy menyu") {
+        if (text.startsWith("/start connect_")) {
+          const profileId = text.split("connect_")[1]?.trim();
+          if (profileId) {
+             try {
+               await supabase.from("profiles").update({ telegram_chat_id: chatId }).eq("id", profileId);
+             } catch(e) {
+               console.error("Link profile error:", e);
+             }
+          }
+          const welcome = `✅ <b>Ajoyib, profilingiz muvaffaqiyatli ulandi!</b>\n\nEndi tizimdagi yangi vakansiyalar va xabarlar avtomatik ravishda shu botga yuboriladi.\n\nQuyidagi menyudan kerakli bo‘limni tanlang:`;
+          await sendTelegramMessage(chatId, welcome, { reply_markup: mainMenuKeyboard });
+        } else if (text.startsWith("/start") || text === "⬅️ Asosiy menyu") {
           const welcome =
             `Assalomu alaykum, <b>${msg.from?.first_name || "Ustoz"}</b>!\n\n` +
             `<b>Teacher Jobs UZ</b> botiga xush kelibsiz. Bu yerda O‘zbekistondagi eng so‘nggi pedagogik vakansiyalarni qidirishingiz va yangi ish o‘rinlaridan birinchilardan bo‘lib xabardor bo‘lishingiz mumkin.\n\n` +
