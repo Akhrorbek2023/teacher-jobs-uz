@@ -27,7 +27,7 @@ export default async function Home() {
             <p className="mt-5 text-lg text-gray-600 max-w-2xl">Davlat va xususiy ta’lim muassasalaridagi vakansiyalarni bir joyda qidiring. AI sizga mos variantlarni tushuntirib beradi.</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/vacancies" className="rounded-2xl bg-blue-600 text-white px-6 py-3 font-bold">Vakansiyalarni qidirish</Link>
-              <Link href="/profile" className="rounded-2xl bg-white border px-6 py-3 font-bold">Profil yaratish</Link>
+              <Link href="/login?mode=register" className="rounded-2xl bg-white border px-6 py-3 font-bold hover:bg-gray-50">Profil yaratish</Link>
             </div>
           </div>
         </div>

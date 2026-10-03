@@ -24,6 +24,7 @@ const REGIONS = [
 ];
 
 export default function Profile() {
+  const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [subjectsInput, setSubjectsInput] = useState("");
   const [languagesInput, setLanguagesInput] = useState("");
@@ -42,21 +43,29 @@ export default function Profile() {
       try {
         const s = createClient();
         const res = await s.auth.getUser();
-        const user = res?.data?.user;
-        if (!user) {
-          location.href = "/login";
-          return;
+        const currentUser = res?.data?.user ?? null;
+        setUser(currentUser);
+
+        const storageKey = currentUser ? `teacher_profile_${currentUser.id}` : "teacher_profile_guest";
+        const localSaved = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+        const localProfile = localSaved ? JSON.parse(localSaved) : null;
+
+        let dbProfile = null;
+        if (currentUser) {
+          const { data, error } = await s
+            .from("profiles")
+            .select("*")
+            .eq("id", currentUser.id)
+            .maybeSingle();
+
+          if (!error && data) {
+            dbProfile = data;
+          }
         }
 
-        const { data, error } = await s
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        const userProfile = data || {
-          id: user.id,
-          full_name: user.user_metadata?.full_name || "",
+        const userProfile = dbProfile || localProfile || {
+          id: currentUser?.id || "guest",
+          full_name: currentUser?.user_metadata?.full_name || "",
           subjects: [],
           languages: [],
           certificates: [],
@@ -87,6 +96,8 @@ export default function Profile() {
 
     try {
       const s = createClient();
+      const res = await s.auth.getUser();
+      const currentUser = res?.data?.user ?? user;
 
       const subjects = subjectsInput
         .split(",")
@@ -108,6 +119,7 @@ export default function Profile() {
 
       const updated = {
         ...profile,
+        id: currentUser?.id || profile.id || "guest",
         subjects,
         languages,
         certificates,
@@ -116,11 +128,28 @@ export default function Profile() {
         updated_at: new Date().toISOString()
       };
 
-      const { error } = await s.from("profiles").upsert(updated);
-      if (error) throw error;
+      // Always save to localStorage first to guarantee data persistence
+      const storageKey = currentUser ? `teacher_profile_${currentUser.id}` : "teacher_profile_guest";
+      if (typeof window !== "undefined") {
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+      }
+
+      // Try saving to Supabase if authenticated
+      if (currentUser) {
+        const { error } = await s.from("profiles").upsert(updated);
+        if (error) {
+          console.warn("Supabase upsert warning:", error);
+          if (error.code === "PGRST205" || error.message?.includes("schema cache") || error.message?.includes("profiles")) {
+            setMsg("✓ Profil qurilmangizda saqlandi! (Eslatma: Supabase SQL Editor'da 'supabase/schema.sql' skriptini ishga tushiring).");
+            setProfile(updated);
+            return;
+          }
+          throw error;
+        }
+      }
 
       setProfile(updated);
-      setMsg("✓ Profil muvaffaqiyatli saqlandi.");
+      setMsg(currentUser ? "✓ Profil muvaffaqiyatli saqlandi." : "✓ Profil saqlandi. To‘liq sinxronizatsiya uchun tizimga kiring.");
     } catch (err) {
       setMsg("Xatolik: " + (err.message || "Saqlash imkoni bo‘lmadi"));
     } finally {
@@ -216,6 +245,20 @@ export default function Profile() {
     <>
       <Header />
       <main className="container-x py-12 max-w-4xl">
+        {!user && (
+          <div className="card p-4 mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sm">
+            <div className="text-gray-700">
+              <span className="font-bold text-blue-700">💡 Eslatma:</span> Profilingizni to‘liq saqlash va barcha imkoniyatlardan foydalanish uchun tizimga kiring.
+            </div>
+            <Link
+              href="/login"
+              className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-xs"
+            >
+              Kirish / Ro‘yxatdan o‘tish
+            </Link>
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl sm:text-4xl font-black text-gray-900">O‘qituvchi profili</h1>
@@ -303,8 +346,9 @@ export default function Profile() {
         <form onSubmit={save} className="card p-8 mt-7 space-y-5">
           <div className="grid md:grid-cols-2 gap-5">
             <div>
-              <label className="text-sm font-bold text-gray-700">Ism-familiya</label>
+              <label className="text-sm font-bold text-gray-700">Ism-familiya *</label>
               <input
+                required
                 className="border rounded-xl w-full px-4 py-3 mt-1.5 focus:outline-blue-500"
                 value={profile.full_name ?? ""}
                 onChange={e => setProfile({ ...profile, full_name: e.target.value })}
