@@ -447,6 +447,24 @@ export default function Profile() {
             />
           </div>
 
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+            <h3 className="text-md font-bold text-blue-900 flex items-center gap-2 mb-1">
+              <span>✈️</span> Telegram bildirishnomalarni ulash
+            </h3>
+            <p className="text-sm text-blue-700 mb-3">
+              Yangi vakansiyalar haqida xabar olish uchun Telegram Chat ID raqamingizni kiriting.
+              ID raqamni bilish uchun <a href="https://t.me/ustozTop2026_bot" target="_blank" className="font-bold underline">@ustozTop2026_bot</a> ga kirib, <code>/profile</code> deb yozing.
+            </p>
+            <div>
+              <input
+                className="border rounded-xl w-full md:w-1/2 px-4 py-3 focus:outline-blue-500 bg-white"
+                value={profile.telegram_chat_id ?? ""}
+                onChange={e => setProfile({ ...profile, telegram_chat_id: e.target.value })}
+                placeholder="Masalan: 123456789"
+              />
+            </div>
+          </div>
+
           <div className="pt-2 flex items-center gap-4">
             <button
               type="submit"
