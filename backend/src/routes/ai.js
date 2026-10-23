@@ -103,11 +103,11 @@ function calculateHeuristicMatches(teacher, vacancies) {
 // Google Gemini AI matching logic
 async function matchWithGemini(apiKey, input) {
   const ai = new GoogleGenAI({ apiKey });
-  const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 
   const prompt = `You are a neutral, highly accurate job matching assistant for Uzbek teachers and schools.
 Analyze this teacher profile and the list of vacancies.
-Return ONLY valid JSON matching this exact JSON shape:
+Return ONLY valid JSON with this exact schema:
 {
   "matches": [
     {
@@ -123,7 +123,7 @@ Return ONLY valid JSON matching this exact JSON shape:
 Rules:
 1. Score is an integer from 0 to 100 based strictly on subject, location, salary expectations, certificates, and experience.
 2. All reasons, gaps, and summary must be written in natural, polite Uzbek (O'zbek tili).
-3. Do not include markdown code block markers or extra conversational text. Return ONLY the raw JSON object.
+3. Do NOT include markdown code blocks or conversational text. Return ONLY valid raw JSON.
 
 Input Data:
 ${JSON.stringify(input, null, 2)}`;
@@ -132,18 +132,14 @@ ${JSON.stringify(input, null, 2)}`;
   try {
     const res = await ai.interactions.create({
       model,
-      input: prompt,
-      response_format: { type: "json" }
+      input: prompt
     });
     raw = res.output_text || "";
   } catch (interactionErr) {
-    console.log("Interactions API fallback to generateContent:", interactionErr.message);
+    console.log("Interactions API error, trying generateContent:", interactionErr.message);
     const res = await ai.models.generateContent({
       model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json"
-      }
+      contents: prompt
     });
     raw = res.text || "";
   }
@@ -152,7 +148,7 @@ ${JSON.stringify(input, null, 2)}`;
   return JSON.parse(cleaned);
 }
 
-// OpenAI matching logic (as alternative)
+// OpenAI matching logic (as fallback alternative)
 async function matchWithOpenAI(apiKey, input) {
   const client = new OpenAI({ apiKey });
   const response = await client.responses.create({
