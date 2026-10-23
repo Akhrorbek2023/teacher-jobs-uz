@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import { z } from "zod";
 
@@ -29,7 +30,7 @@ const schema = z.object({
   })).max(50)
 });
 
-// Heuristic matching fallback when OpenAI is not configured
+// Heuristic matching fallback when AI API is not configured or fails
 function calculateHeuristicMatches(teacher, vacancies) {
   const teacherSubjects = (teacher.subjects || []).map(s => s.toLowerCase().trim()).filter(Boolean);
   const teacherCity = (teacher.city || "").toLowerCase().trim();
@@ -99,42 +100,107 @@ function calculateHeuristicMatches(teacher, vacancies) {
   };
 }
 
+// Google Gemini AI matching logic
+async function matchWithGemini(apiKey, input) {
+  const ai = new GoogleGenAI({ apiKey });
+  const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+
+  const prompt = `You are a neutral, highly accurate job matching assistant for Uzbek teachers and schools.
+Analyze this teacher profile and the list of vacancies.
+Return ONLY valid JSON matching this exact JSON shape:
+{
+  "matches": [
+    {
+      "vacancy_id": "string",
+      "score": 0,
+      "reasons": ["string in Uzbek explaining why this is a good match"],
+      "gaps": ["string in Uzbek explaining potential mismatch or requirements"]
+    }
+  ],
+  "summary": "string in Uzbek summarizing overall recommendations"
+}
+
+Rules:
+1. Score is an integer from 0 to 100 based strictly on subject, location, salary expectations, certificates, and experience.
+2. All reasons, gaps, and summary must be written in natural, polite Uzbek (O'zbek tili).
+3. Do not include markdown code block markers or extra conversational text. Return ONLY the raw JSON object.
+
+Input Data:
+${JSON.stringify(input, null, 2)}`;
+
+  let raw = "";
+  try {
+    const res = await ai.interactions.create({
+      model,
+      input: prompt,
+      response_format: { type: "json" }
+    });
+    raw = res.output_text || "";
+  } catch (interactionErr) {
+    console.log("Interactions API fallback to generateContent:", interactionErr.message);
+    const res = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+    raw = res.text || "";
+  }
+
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  return JSON.parse(cleaned);
+}
+
+// OpenAI matching logic (as alternative)
+async function matchWithOpenAI(apiKey, input) {
+  const client = new OpenAI({ apiKey });
+  const response = await client.responses.create({
+    model: process.env.OPENAI_MODEL || "gpt-5-mini",
+    input: [
+      {
+        role: "system",
+        content: `You are a neutral job matching assistant for Uzbek teachers.
+Return ONLY valid JSON with shape:
+{"matches":[{"vacancy_id":"string","score":0,"reasons":["string"],"gaps":["string"]}],"summary":"string"}
+Score is 0-100. Write reasons and gaps in Uzbek.`
+      },
+      { role: "user", content: JSON.stringify(input) }
+    ]
+  });
+
+  const raw = (response.output_text || "").trim();
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  return JSON.parse(cleaned);
+}
+
 router.post("/match", async (req, res, next) => {
   try {
     const input = schema.parse(req.body);
 
-    if (!process.env.OPENAI_API_KEY) {
-      // Return smart heuristic match if OpenAI API is not configured
-      const fallbackResult = calculateHeuristicMatches(input.teacher, input.vacancies);
-      return res.json(fallbackResult);
+    // 1. Try Google Gemini first if GEMINI_API_KEY is configured
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const result = await matchWithGemini(process.env.GEMINI_API_KEY, input);
+        return res.json(result);
+      } catch (geminiErr) {
+        console.warn("Google Gemini API call failed, falling back:", geminiErr.message);
+      }
     }
 
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    try {
-      const response = await client.responses.create({
-        model: process.env.OPENAI_MODEL || "gpt-5-mini",
-        input: [
-          {
-            role: "system",
-            content: `You are a neutral job matching assistant for Uzbek teachers.
-Return ONLY valid JSON with shape:
-{"matches":[{"vacancy_id":"string","score":0,"reasons":["string"],"gaps":["string"]}],"summary":"string"}
-Score is 0-100 and must reflect explicit profile/vacancy compatibility, not personality or protected traits.
-Do not invent requirements. Write reasons and gaps in Uzbek.`
-          },
-          { role: "user", content: JSON.stringify(input) }
-        ]
-      });
-
-      const raw = (response.output_text || "").trim();
-      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-      const result = JSON.parse(cleaned);
-      return res.json(result);
-    } catch (openaiErr) {
-      console.warn("OpenAI API call failed, falling back to heuristic matching:", openaiErr.message);
-      const fallbackResult = calculateHeuristicMatches(input.teacher, input.vacancies);
-      return res.json(fallbackResult);
+    // 2. Try OpenAI if OPENAI_API_KEY is configured
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const result = await matchWithOpenAI(process.env.OPENAI_API_KEY, input);
+        return res.json(result);
+      } catch (openaiErr) {
+        console.warn("OpenAI API call failed, falling back:", openaiErr.message);
+      }
     }
+
+    // 3. Smart heuristic fallback if no AI API key is configured or API calls failed
+    const fallbackResult = calculateHeuristicMatches(input.teacher, input.vacancies);
+    return res.json(fallbackResult);
   } catch (e) {
     next(e);
   }
