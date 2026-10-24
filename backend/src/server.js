@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import vacancies from "./routes/vacancies.js";
 import ai from "./routes/ai.js";
 import companies from "./routes/companies.js";
+import metrics from "./routes/metrics.js";
 import { startBot } from "./bot.js";
 
 const app = express();
@@ -34,6 +35,7 @@ app.get("/api/health", (_req,res) => res.json({ ok:true, service:"teacher-jobs-u
 app.use("/api/vacancies", vacancies);
 app.use("/api/companies", companies);
 app.use("/api/ai", ai);
+app.use("/api/metrics", metrics);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import Header from "../../../components/Header";
 import { createClient } from "../../../lib/supabase";
+import { trackEvent } from "../../../lib/analytics";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -103,6 +104,7 @@ export default function VacancyDetail({ params }) {
         }
       }
 
+      trackEvent("vacancy_applied", { vacancy_id: id, subject: vacancy?.subject });
       setApplySuccess(true);
       setTimeout(() => {
         setShowApplyModal(false);

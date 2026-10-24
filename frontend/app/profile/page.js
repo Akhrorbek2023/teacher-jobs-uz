@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "../../components/Header";
 import { createClient } from "../../lib/supabase";
+import { trackEvent } from "../../lib/analytics";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -132,6 +133,7 @@ export default function Profile() {
       const storageKey = currentUser ? `teacher_profile_${currentUser.id}` : "teacher_profile_guest";
       if (typeof window !== "undefined") {
         localStorage.setItem(storageKey, JSON.stringify(updated));
+      trackEvent("profile_completed", { city: profile.city, subjects_count: subjects.length });
       }
 
       // Try saving to Supabase if authenticated
@@ -463,6 +465,7 @@ export default function Profile() {
                 href={`https://t.me/ustozTop2026_bot?start=connect_${profile.id || "guest"}`}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() => trackEvent("telegram_connected", { profile_id: profile.id })}
                 className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-colors"
               >
                 Telegram botga ulash

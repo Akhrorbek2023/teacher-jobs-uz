@@ -33,6 +33,9 @@ export default function Header() {
           <Link href="/vacancies" className="text-gray-700 hover:text-blue-600">Vakansiyalar</Link>
           <Link href="/vacancies/new" className="hidden sm:inline-block text-blue-600 hover:underline">+ E'lon berish</Link>
           <Link href="/profile" className="text-gray-700 hover:text-blue-600">Profil</Link>
+          <Link href="/admin/metrics" className="hidden md:inline-flex items-center gap-1.5 text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100 transition">
+            <span>📊</span> Metrikalar
+          </Link>
           {user ? (
             <button
               onClick={async () => {
