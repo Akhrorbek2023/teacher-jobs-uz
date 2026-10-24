@@ -6,7 +6,7 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 const frontendUrl = process.env.FRONTEND_URL?.split(",")[0] || "http://localhost:3000";
 
 // In-memory fallback subscribers map when DB table is not ready
-const localSubscribers = new Set();
+export const localSubscribers = new Set();
 
 // Send message helper
 export async function sendTelegramMessage(chatId, text, extra = {}) {
