@@ -30,9 +30,10 @@ function LoginForm() {
 
     try {
       const s = createClient();
-      const origin = typeof window !== "undefined"
+      const defaultSite = process.env.NEXT_PUBLIC_SITE_URL || "https://teacher-jobs-uz.netlify.app";
+      const origin = (typeof window !== "undefined" && window.location.origin && !window.location.origin.includes("localhost") && !window.location.origin.includes("127.0.0.1"))
         ? window.location.origin
-        : (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000");
+        : defaultSite;
 
       const emailRedirectTo = `${origin}/auth/callback`;
 
